@@ -25,6 +25,9 @@ def list_images(directory):
 
 
 def get_train_images(paths, resize_len=512, crop_height=256, crop_width=256, flag = True):
+    if isinstance(paths, str):
+        paths = [paths]
+
     images = []
     ny = 0
     nx = 0
@@ -77,7 +80,7 @@ def get_images(paths, height=None, width=None):
         images.append(image)
 
     images = np.stack(images, axis=0)
-
+    print('images shape gen:', images.shape)
     return images
 
 
@@ -97,14 +100,14 @@ def save_images(paths, datas, save_path, prefix=None, suffix=None):
 
     for i, path in enumerate(paths):
         data = datas[i]
-        print('data ==>>\n', data)
+        # print('data ==>>\n', data)
         data = data.reshape([data.shape[0], data.shape[1]])
-        print('data reshape==>>\n', data)
+        # print('data reshape==>>\n', data)
 
         name, ext = splitext(path)
         name = name.split(sep)[-1]
         
-        path = join(save_path, prefix + name + suffix + ext)
+        path = join(save_path, prefix + suffix + ext)
         print('data path==>>', path)
 
 

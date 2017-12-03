@@ -3,15 +3,16 @@
 # Decoder has no BN/IN layers.
 
 import tensorflow as tf
-
+from tensorflow.python import pywrap_tensorflow
 
 WEIGHT_INIT_STDDEV = 0.1
 
 
 class Decoder(object):
 
-    def __init__(self):
+    def __init__(self, model_pre_path):
         self.weight_vars = []
+        self.model_pre_path = model_pre_path
 
         with tf.variable_scope('decoder'):
             self.weight_vars.append(self._create_variables(512, 256, 3, scope='conv4_1'))
@@ -28,10 +29,17 @@ class Decoder(object):
             self.weight_vars.append(self._create_variables( 64,   1, 3, scope='conv1_1'))
 
     def _create_variables(self, input_filters, output_filters, kernel_size, scope):
+
+        reader = pywrap_tensorflow.NewCheckpointReader(self.model_pre_path)
         with tf.variable_scope(scope):
-            shape  = [kernel_size, kernel_size, input_filters, output_filters]
-            kernel = tf.Variable(tf.truncated_normal(shape, stddev=WEIGHT_INIT_STDDEV), name='kernel')
-            bias   = tf.Variable(tf.zeros([output_filters]), name='bias')
+            if scope == 'conv1_1':
+                # for use style model as pretrain
+                shape = [kernel_size, kernel_size, input_filters, output_filters]
+                kernel = tf.Variable(tf.truncated_normal(shape, stddev=WEIGHT_INIT_STDDEV), name='kernel')
+                bias = tf.Variable(tf.zeros([output_filters]), name='bias')
+            else:
+                kernel = tf.Variable(reader.get_tensor('decoder/' + scope + '/kernel'), name='kernel')
+                bias = tf.Variable(reader.get_tensor('decoder/' + scope + '/bias'), name='bias')
             return (kernel, bias)
 
     def decode(self, image):

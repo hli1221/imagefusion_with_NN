@@ -21,14 +21,14 @@ BATCH_SIZE = 1
 LEARNING_RATE = 1e-4
 EPSILON = 1e-5
 
-def train(ssim_weight, original_imgs_path_name, source_a_imgs_path, source_b_imgs_path_name, encoder_path, save_path,  model_pre_path, debug=False, logging_period=100):
+def train_recons(original_imgs_path, encoder_path, save_path,  model_pre_path, debug=False, logging_period=100):
     if debug:
         from datetime import datetime
         start_time = datetime.now()
 
-    # num_imgs = len(source_a_imgs_path)
-    num_imgs = 10000
-    source_a_imgs_path = source_a_imgs_path[:num_imgs]
+    num_imgs = len(original_imgs_path)
+    # num_imgs = 10000
+    original_imgs_path = original_imgs_path[:num_imgs]
     mod = num_imgs % BATCH_SIZE
 
     print('Train images number %d.\n' % num_imgs)
@@ -36,7 +36,7 @@ def train(ssim_weight, original_imgs_path_name, source_a_imgs_path, source_b_img
 
     if mod > 0:
         print('Train set has been trimmed %d samples...\n' % mod)
-        source_a_imgs_path = source_a_imgs_path[:-mod]
+        original_imgs_path = original_imgs_path[:-mod]
 
     # get the traing image shape
     HEIGHT, WIDTH, CHANNELS = TRAINING_IMAGE_SHAPE
@@ -48,16 +48,15 @@ def train(ssim_weight, original_imgs_path_name, source_a_imgs_path, source_b_img
     # create the graph
     with tf.Graph().as_default(), tf.Session() as sess:
         original = tf.placeholder(tf.float32, shape=INPUT_SHAPE_OR, name='original')
-        source_a = tf.placeholder(tf.float32, shape=INPUT_SHAPE, name='source_a')
-        source_b = tf.placeholder(tf.float32, shape=INPUT_SHAPE, name='source_b')
+        source = tf.placeholder(tf.float32, shape=INPUT_SHAPE, name='source_a')
 
-        print('source:', source_a.shape)
+        print('source:', source.shape)
 
         # create the style transfer net
         stn = StyleTransferNet(encoder_path, model_pre_path)
 
         # pass content and style to the stn, getting the generated_img, fused image
-        generated_img = stn.transform(source_a, source_b)
+        generated_img = stn.transform_recons(source)
 
         # # get the target feature maps which is the output of AdaIN
         # target_features = stn.target_features
@@ -65,11 +64,12 @@ def train(ssim_weight, original_imgs_path_name, source_a_imgs_path, source_b_img
         pixel_loss = tf.reduce_sum(tf.reduce_mean(tf.square(original - generated_img), axis=[1, 2]))
         pixel_loss = pixel_loss/(HEIGHT*WIDTH)
 
+        # pixel_loss = pixel_loss*10
         # compute the SSIM loss
         ssim_loss = 1 - SSIM.tf_ssim(original, generated_img)
 
         # compute the total loss
-        loss = pixel_loss + ssim_weight*ssim_loss
+        loss = pixel_loss + ssim_loss
 
         # Training step
         train_op = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
@@ -82,7 +82,7 @@ def train(ssim_weight, original_imgs_path_name, source_a_imgs_path, source_b_img
         # ** Start Training **
         step = 0
         count_loss = 0
-        n_batches = int(len(source_a_imgs_path) // BATCH_SIZE)
+        n_batches = int(len(original_imgs_path) // BATCH_SIZE)
 
         if debug:
             elapsed_time = datetime.now() - start_time
@@ -93,28 +93,20 @@ def train(ssim_weight, original_imgs_path_name, source_a_imgs_path, source_b_img
         Loss_all = [i for i in range(EPOCHS * n_batches)]
         for epoch in range(EPOCHS):
 
-            np.random.shuffle(source_a_imgs_path)
+            np.random.shuffle(original_imgs_path)
 
             for batch in range(n_batches):
                 # retrive a batch of content and style images
 
-                source_a_path = source_a_imgs_path[batch*BATCH_SIZE:(batch*BATCH_SIZE + BATCH_SIZE)]
-                source_a_str = source_a_path[0]
-                name_f = source_a_str.find('\\')
-                source_image_name = source_a_str[name_f + 1:]
-                source_image_name_comm = source_image_name[2:]
-
-                source_b_path = [source_b_imgs_path_name + source_image_name]
-                original_path = [original_imgs_path_name + source_image_name_comm]
+                original_path = original_imgs_path[batch*BATCH_SIZE:(batch*BATCH_SIZE + BATCH_SIZE)]
 
                 original_batch = get_train_images(original_path, crop_height=HEIGHT, crop_width=WIDTH, flag=False)
-                source_a_batch = get_train_images(source_a_path, crop_height=HEIGHT, crop_width=WIDTH)
-                source_b_batch = get_train_images(source_b_path, crop_height=HEIGHT, crop_width=WIDTH)
+                source_batch = get_train_images(original_path, crop_height=HEIGHT, crop_width=WIDTH)
 
-                original_batch = original_batch.reshape([1, 256, 256, 1])
+                original_batch = original_batch.reshape([BATCH_SIZE, 256, 256, 1])
 
                 # run the training step
-                sess.run(train_op, feed_dict={original: original_batch, source_a: source_a_batch, source_b: source_b_batch})
+                sess.run(train_op, feed_dict={original: original_batch, source: source_batch})
                 step += 1
                 # if step % 1000 == 0:
                 #     saver.save(sess, save_path, global_step=step)
@@ -124,14 +116,12 @@ def train(ssim_weight, original_imgs_path_name, source_a_imgs_path, source_b_img
                     if is_last_step or step % logging_period == 0:
                         elapsed_time = datetime.now() - start_time
                         _pixel_loss, _ssim_loss, _loss = sess.run([pixel_loss, ssim_loss, loss],
-                            feed_dict={original: original_batch, source_a: source_a_batch, source_b: source_b_batch})
+                            feed_dict={original: original_batch, source: source_batch})
                         Loss_all[count_loss] = _loss
                         count_loss += 1
                         print('step: %d,  total loss: %.3f,  elapsed time: %s' % (step, _loss, elapsed_time))
                         print('pixel loss: %.3f' % (_pixel_loss))
                         print('ssim loss : %.3f\n' % (_ssim_loss))
-                        # print('pca or shape  : ', _pca_or.shape)
-                        # print('pca gen shape : ', _pca_gen.shape)
 
         # ** Done Training & Save the model **
         saver.save(sess, save_path)

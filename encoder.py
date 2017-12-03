@@ -87,6 +87,16 @@ class Encoder(object):
             return image + np.array([123.68, 116.779, 103.939])
 
 
+    def removemean(self, image):
+        mean = 128
+        return image - mean
+
+    def addmean(self, image):
+        mean = 128
+        return image + mean
+
+
+
 def conv2d(x, kernel, bias):
     # padding image with reflection mode
     x_padded = tf.pad(x, [[0, 0], [1, 1], [1, 1], [0, 0]], mode='REFLECT')

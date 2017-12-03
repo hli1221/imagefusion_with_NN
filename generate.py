@@ -5,95 +5,53 @@ import tensorflow as tf
 
 from style_transfer_net import StyleTransferNet
 from utils import get_images, save_images, get_train_images
+from l1norm_max_choose import L1_Max
+
+def generate(content_path, style_path, encoder_path, model_path, model_pre_path, output_path=None):
+
+    outputs = _handler(content_path, style_path, encoder_path, model_path, model_pre_path, output_path=output_path)
+    return list(outputs)
 
 
-def generate(contents_path, style_path, encoder_path, model_path, 
-    is_same_size=False, resize_height=None, resize_width=None, 
-    output_path=None, prefix='stylized-', suffix=None):
-
-    if isinstance(contents_path, str):
-        contents_path = [contents_path]
-    if isinstance(style_path, list):
-        style_path = style_path[0]
-
-    if is_same_size or (resize_height is not None and resize_width is not None):
-        outputs = _handler1(contents_path, style_path, encoder_path, model_path, 
-            resize_height=resize_height, resize_width=resize_width, 
-            output_path=output_path, prefix=prefix, suffix=suffix)
-        return list(outputs)
-    else:
-        outputs = _handler2(contents_path, style_path, encoder_path, model_path, 
-            output_path=output_path, prefix=prefix, suffix=suffix)
-        return outputs
-
-
-def _handler1(content_path, style_path, encoder_path, model_path, 
-    resize_height=None, resize_width=None, output_path=None, 
-    prefix=None, suffix=None):
-
-    # get the actual image data, output shape:
-    # (num_images, height, width, color_channels)
-    # content_img = get_images(content_path, resize_height, resize_width)
-    # style_img   = get_images(style_path)
-
-    content_img = get_train_images(content_path)
-    style_img = get_train_images([style_path])
+def _handler(content_path, style_path, encoder_path, model_path, model_pre_path, output_path=None):
 
     with tf.Graph().as_default(), tf.Session() as sess:
+        index = 2
+        content_path = content_path + str(index) + '.jpg'
+        style_path = style_path + str(index) + '.jpg'
+
+        content_img = get_train_images(content_path)
+        style_img = get_train_images(style_path)
+
         # build the dataflow graph
         content = tf.placeholder(
             tf.float32, shape=content_img.shape, name='content')
-        style   = tf.placeholder(
+        style = tf.placeholder(
             tf.float32, shape=style_img.shape, name='style')
 
-        stn = StyleTransferNet(encoder_path)
+        stn = StyleTransferNet(encoder_path, model_pre_path)
 
-        output_image = stn.transform(content, style)
+        enc_c, enc_s = stn.encoder_process(content, style)
+
+        target = tf.placeholder(
+            tf.float32, shape=enc_c.shape, name='target')
+
+        # output_image = stn.transform(content, style)
+        output_image = stn.decoder_process(target)
 
         # restore the trained model and run the style transferring
         saver = tf.train.Saver()
         saver.restore(sess, model_path)
 
-        output = sess.run(output_image, 
+        # get the output
+        enc_c, enc_s = sess.run([enc_c, enc_s],
             feed_dict={content: content_img, style: style_img})
+        feature = L1_Max(enc_c, enc_s)
+        # feature = enc_s
+        output = sess.run(output_image, feed_dict={target: feature})
 
     if output_path is not None:
-        save_images(content_path, output, output_path, 
-            prefix=prefix, suffix=suffix)
+        save_images(content_path, output, output_path,
+                    prefix='fused' + str(index) + '_', suffix='deep')
 
     return output
-
-
-def _handler2(content_path, style_path, encoder_path, model_path, 
-    output_path=None, prefix=None, suffix=None):
-
-    style_img = get_images(style_path)
-
-    with tf.Graph().as_default(), tf.Session() as sess:
-        # build the dataflow graph
-        content = tf.placeholder(
-            tf.float32, shape=(1, None, None, 3), name='content')
-        style   = tf.placeholder(
-            tf.float32, shape=style_img.shape, name='style')
-
-        stn = StyleTransferNet(encoder_path)
-
-        output_image = stn.transform(content, style)
-
-        # restore the trained model and run the style transferring
-        saver = tf.train.Saver()
-        saver.restore(sess, model_path)
-
-        output = []
-        for path in content_path:
-            content_img = get_images(path)
-            result = sess.run(output_image, 
-                feed_dict={content: content_img, style: style_img})
-            output.append(result[0])
-
-    if output_path is not None:
-        save_images(content_path, output, output_path, 
-            prefix=prefix, suffix=suffix)
-
-    return output
-
