@@ -1,5 +1,12 @@
 # Image Fusion with NN
 
+not finished
+
+
+![](https://github.com/exceptionLi/image_fusion_with_NN/blob/master/framework/framework.png)
+![](https://github.com/exceptionLi/image_fusion_with_NN/blob/master/framework/fusion_strategy.png)
+![](https://github.com/exceptionLi/image_fusion_with_NN/blob/master/framework/train_decoder.png)
+
 The VGG19 network come from [elleryqueenhomels' arbitrary_style_transfer](https://github.com/elleryqueenhomels/arbitrary_style_transfer).
 
 And the whole program is also implemented based on [elleryqueenhomels' arbitrary_style_transfer](https://github.com/elleryqueenhomels/arbitrary_style_transfer).
