@@ -1,6 +1,6 @@
 # Image Fusion with NN
 
-not finished
+Not finished.
 
 
 ![](https://github.com/exceptionLi/image_fusion_with_NN/blob/master/framework/framework.png)
